@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
@@ -29,10 +30,25 @@ func fatal(err error) {
 	os.Exit(1)
 }
 
+func debug(msg string) {
+	fmt.Println(msg)
+}
+
+func GetCurrentIP(host string) string {
+	addrs, err := net.LookupHost(host)
+	if err != nil {
+		fatal(err)
+	}
+	if len(addrs) > 1 {
+		fatal(errors.New("Only support case where a host has one address"))
+	}
+	return addrs[0]
+}
+
 // Get preferred outbound ip of this machine
 // Thanks go to Marcel Molina via
 // https://stackoverflow.com/questions/23558425/how-do-i-get-the-local-ip-address-in-go
-func GetOutboundIP() net.IP {
+func GetOutboundIP() string {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
 		fatal(err)
@@ -41,7 +57,7 @@ func GetOutboundIP() net.IP {
 
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 
-	return localAddr.IP
+	return localAddr.IP.String()
 }
 
 func createA(svc *route53.Route53, zoneId string, hostname string, ip string) error {
@@ -70,9 +86,8 @@ func createA(svc *route53.Route53, zoneId string, hostname string, ip string) er
 	}
 	resp, err := svc.ChangeResourceRecordSets(params)
 
-	// Pretty-print the response data.
-	fmt.Println("Change Response:")
-	fmt.Println(resp)
+	debug("Change Response:")
+	debug(fmt.Sprintf("%#v", resp))
 
 	if err != nil {
 		return err
@@ -86,18 +101,26 @@ func main() {
 
 	flag.Parse()
 
+	fqdn := fmt.Sprintf("%s.%s", hostname, domain)
+
 	sess, err := session.NewSession()
 	if err != nil {
 		fatal(err)
 	}
 
 	ip := GetOutboundIP()
-	fmt.Printf("ip: %#v\n", ip.String())
+	debug(fmt.Sprintf("ip: %#v", ip))
+
+	currentIP := GetCurrentIP(fqdn)
+	debug(fmt.Sprintf("currentIP: %#v", currentIP))
+	if currentIP == ip {
+		// We have nothing to do
+		return
+	}
 
 	svc := route53.New(sess)
-	fqdn := fmt.Sprintf("%s.%s", hostname, domain)
 	fmt.Printf("Updating for %s -> %s", fqdn, ip)
-	err = createA(svc, zoneId, fqdn, ip.String())
+	err = createA(svc, zoneId, fqdn, ip)
 	if err != nil {
 		fatal(err)
 	}
