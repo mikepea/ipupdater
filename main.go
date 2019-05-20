@@ -17,12 +17,14 @@ const weight = int64(1)
 var hostname string
 var zoneId string
 var domain string
+var skipLookup bool
 
 func init() {
 	defaultHostname, _ := os.Hostname()
 	flag.StringVar(&domain, "domain", "", "domain name")
 	flag.StringVar(&hostname, "host", defaultHostname, "hostname for A record (defaults to hostname)")
 	flag.StringVar(&zoneId, "zoneid", "", "AWS Zone Id for domain")
+	flag.BoolVar(&skipLookup, "skipLookup", false, "Skip initial A record lookup")
 }
 
 func fatal(err error) {
@@ -111,11 +113,13 @@ func main() {
 	ip := GetOutboundIP()
 	debug(fmt.Sprintf("ip: %#v", ip))
 
-	currentIP := GetCurrentIP(fqdn)
-	debug(fmt.Sprintf("currentIP: %#v", currentIP))
-	if currentIP == ip {
-		// We have nothing to do
-		return
+	if !skipLookup {
+		currentIP := GetCurrentIP(fqdn)
+		debug(fmt.Sprintf("currentIP: %#v", currentIP))
+		if currentIP == ip {
+			// We have nothing to do
+			return
+		}
 	}
 
 	svc := route53.New(sess)
