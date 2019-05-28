@@ -19,8 +19,16 @@ var zoneId string
 var domain string
 var skipLookup bool
 
+var CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+
 func init() {
 	defaultHostname, _ := os.Hostname()
+	flag.Usage = func() {
+		CommandLine.SetOutput(os.Stdout)
+		fmt.Fprintf(CommandLine.Output(), "Usage of %s:\n", os.Args[0])
+		flag.PrintDefaults()
+		os.Exit(0)
+	}
 	flag.StringVar(&domain, "domain", "", "domain name")
 	flag.StringVar(&hostname, "host", defaultHostname, "hostname for A record (defaults to hostname)")
 	flag.StringVar(&zoneId, "zoneid", "", "AWS Zone Id for domain")
